@@ -21,51 +21,120 @@ var responseJSON = function(res, ret) {
     res.json(ret);
   }
 };
-// 添加会议室
-router.get('/', function(req, res, next) {
+// 生成周报
+router.post('/', function(req, res, next) {
 
   // 从连接池获取连接 
   pool.getConnection(function(err, connection) {
     // 获取前台页面传过来的参数  
-    var param = req.query || req.params || req.body;
+    var param = req.body;
     // 建立连接 增加一个信息 
     var timestamp = new Date().getTime();
+    console.log(req.body)
     var dateArr = getWorkDay(getFirstDayOfWeek(param.timerange||getLocalTime(timestamp)));
-    connection.query(reportSql.exportByTime, [dateArr[0], dateArr[4]], function(err, result) {
-      if (result && (result.length == 0)) {
-        result = {
-          code: '-404',
-          msg: '暂无数据'
+    connection.query(userSql.getUserByToken, [param.token], function(err, result_1) {
+      console.log(result_1)
+      if (result_1 && (result_1.length == 0)) {
+        result_1 = {
+          code: '-201',
+          msg: '对不起，用户不存在'
         }
-        responseJSON(res, result);
+        // 以json形式，把操作结果返回给前台页面     
+        responseJSON(res, result_1);
+        // 释放连接  
         connection.release();
       }else{
-        responseJSON(res, result);
-        for(var i in result){
-          var contentList = JSON.parse(result[i].content);
-          var typeList = [];
-          var finalList = [];
-          for(var j in contentList){
-            var type = contentList[j].item_title + ' ' + contentList[j].item_type;
-            if(typeList.indexOf(type) == -1){
-              // console.log(type);
-              typeList.push(type);
-              finalList.push({
-                name: type,
-                content: '',
-                risk: ''
-              })
-            }else{
-              finalList[typeList.indexOf(type)].content += contentList[j].item_content;
-              finalList[typeList.indexOf(type)].risk += contentList[j].item_risk;
+        connection.query(reportSql.exportByTime, [dateArr[0], dateArr[4], result_1[0].id], function(err, result) {
+        if (result && (result.length == 0)) {
+          result = {
+            code: '-404',
+            msg: '暂无数据'
+          }
+          responseJSON(res, result);
+          connection.release();
+        }else{
+          var daybydayArr = [];
+          for(var i in result){
+            var contentList = JSON.parse(result[i].content);
+            var typeList = [];
+            var finalList = [];
+            for(var j in contentList){
+              var type = contentList[j].item_title + ' ' + contentList[j].item_type;
+              if(typeList.indexOf(type) == -1){
+                // console.log(contentList[j])
+                typeList.push(type);
+                finalList.push({
+                  name: type,
+                  content: contentList[j].item_content,
+                  risk: (contentList[j].item_rist||'')
+                })
+              }else{
+                finalList[typeList.indexOf(type)].content += (contentList[j].item_content?(';'+contentList[j].item_content):'');
+                finalList[typeList.indexOf(type)].risk += (contentList[j].item_risk?(';'+contentList[j].item_risk):'');
+              }
             }
+            daybydayArr.push(finalList);
+            // console.log(finalList)
           }
 
-          console.log(finalList)
+          var typeList = [];
+          var reportList = [];
+          var contentList = [];
+          var riskList = [];
+          for(let i in daybydayArr){
+            for(let j in daybydayArr[i]){
+              // console.log(daybydayArr[i][j].name)
+              let name = daybydayArr[i][j].name;
+              if(typeList.indexOf(name) == -1){
+                typeList.push(name);
+                reportList.push({
+                  name: name,
+                  content: daybydayArr[i][j].content,
+                  risk: daybydayArr[i][j].risk
+                });
+                contentList.push(daybydayArr[i][j].content);
+                riskList.push(daybydayArr[i][j].risk);
+              }else{
+                //内容相似度排除
+                let contentCount = 0;
+                for(let m in contentList){
+                  if(strSimilarity2Percent(daybydayArr[i][j].content, contentList[m]) >= 0.7){
+                    contentCount += 1;
+                  }
+                }
+
+                if(contentCount == 0){
+                  reportList[typeList.indexOf(name)].content += '\n'+daybydayArr[i][j].content;
+                  contentList.push(daybydayArr[i][j].content);
+                }
+
+                //风险相似度排除
+                let riskCount = 0;
+                for(let m in riskList){
+                  if(strSimilarity2Percent(daybydayArr[i][j].risk, riskList[m]) >= 0.7){
+                    riskCount += 1;
+                  }
+                }
+
+                if(riskCount == 0){
+                  reportList[typeList.indexOf(name)].risk += '\n'+daybydayArr[i][j].risk;
+                  riskList.push(daybydayArr[i][j].risk);
+                }
+              }
+            }
+          }
+          result = {
+            code: 200,
+            msg: 'ok',
+            data: reportList
+          }
+          responseJSON(res, result);
+          connection.release();
         }
-        connection.release();
+      });
       }
     });
+    
   });
 });
 

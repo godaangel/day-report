@@ -41,9 +41,6 @@ function getLocalTime(nS) {
   return year + "-" + month + "-" + date;
 }
 
-
-
-
 //两个字符串的相似程度，并返回相差字符个数
 function strSimilarity2Number(s, t) {
   var n = s.length,
