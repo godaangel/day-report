@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node ./bin/www",
     "dev": "nodemon ./bin/www",
-    "forever": "forever start ./bin/www"
+    "forever": "forever start ./bin/www",
+    "prod": "node github.js"
   },
   "dependencies": {
     "body-parser": "~1.18.2",
