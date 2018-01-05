@@ -44,7 +44,7 @@ router.post('/', function(req, res, next) {
         // 释放连接  
         connection.release();
       }else{
-        connection.query(reportSql.exportByTime, [dateArr[0], dateArr[4], result_1[0].id], function(err, result) {
+        connection.query(reportSql.exportMyByTime, [dateArr[0], dateArr[4], result_1[0].id], function(err, result) {
         if (result && (result.length == 0)) {
           result = {
             code: '-404',
