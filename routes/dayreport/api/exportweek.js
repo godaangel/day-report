@@ -8,6 +8,8 @@ var userSql = require('../../../db/day_report/userSql');
 
 var nodeExcel = require('excel-export');
 
+var getUserInfo  = require('../common/getUserInfo');
+
 // 使用DBConfig.js的配置信息创建一个MySQL连接池
 var pool = mysql.createPool(dbConfig.mysql);
 // 响应一个JSON数据
@@ -24,34 +26,17 @@ var responseJSON = function(res, ret) {
 // 生成周报
 router.post('/', function(req, res, next) {
 
-  // 从连接池获取连接 
-  pool.getConnection(function(err, connection) {
-    // 获取前台页面传过来的参数  
-    var param = req.body;
-    // 建立连接 增加一个信息 
-    var timestamp = new Date().getTime();
-    console.log(req.body)
-    var dateArr = getWorkDay(getFirstDayOfWeek(param.timerange||getLocalTime(timestamp)));
-    connection.query(userSql.getUserByToken, [param.token], function(err, result_1) {
-      console.log(result_1)
-      if (result_1 && (result_1.length == 0)) {
-        result_1 = {
-          code: '-201',
-          msg: '对不起，用户不存在'
-        }
-        // 以json形式，把操作结果返回给前台页面     
-        responseJSON(res, result_1);
-        // 释放连接  
-        connection.release();
-      }else{
-        connection.query(reportSql.exportMyByTime, [dateArr[0], dateArr[4], result_1[0].id], function(err, result) {
+  function getWeekReport(connection, userInfo, param){
+    return new Promise((resolve, reject) => {
+      var timestamp = new Date().getTime();
+      var dateArr = getWorkDay(getFirstDayOfWeek(param.timerange||getLocalTime(timestamp)));
+      connection.query(reportSql.exportMyByTime, [dateArr[0], dateArr[4], userInfo[0].id], function(err, result) {
         if (result && (result.length == 0)) {
           result = {
             code: '-404',
             msg: '暂无数据'
           }
-          responseJSON(res, result);
-          connection.release();
+          reject(result);
         }else{
           var daybydayArr = [];
           for(var i in result){
@@ -128,13 +113,28 @@ router.post('/', function(req, res, next) {
             msg: 'ok',
             data: reportList
           }
-          responseJSON(res, result);
-          connection.release();
+          resolve(result);
         }
       });
-      }
     });
-    
+  }
+
+  // 从连接池获取连接 
+  pool.getConnection(function(err, connection) {
+    // 获取前台页面传过来的参数  
+    var param = req.body;
+    let getInfo = async function() {
+      let getUser = await getUserInfo(connection, param);
+      let getReport = await getWeekReport(connection, getUser, param);
+      responseJSON(res, getReport);
+      connection.release();
+    }
+
+    getInfo().catch((result) => {
+      responseJSON(res, result);
+      connection.release();
+    });
+
   });
 });
 

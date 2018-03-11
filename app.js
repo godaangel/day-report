@@ -65,6 +65,9 @@ app.use('/dayreport/api/export', exportReport);
 var exportWeekReport = require('./routes/dayreport/api/exportweek');
 app.use('/dayreport/api/exportweek', exportWeekReport);
 
+var getKeyword = require('./routes/dayreport/api/question');
+app.use('/dayreport/api/question', getKeyword);
+
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   var err = new Error('Not Found');
